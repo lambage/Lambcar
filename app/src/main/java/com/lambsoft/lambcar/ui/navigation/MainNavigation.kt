@@ -49,7 +49,6 @@ fun MainNavigation(viewModel: LambcarViewModel = viewModel()) {
             isDeviceConnected = uiState.isDeviceConnected,
             discoveredCharacteristics = uiState.discoveredCharacteristics,
             connect = viewModel::connectActiveDevice,
-            discoverServices = viewModel::discoverActiveDeviceServices,
             writeDirection = viewModel::writeDirection,
             writeSpeed = viewModel::writeSpeed,
             writeTurn = viewModel::writeTurn

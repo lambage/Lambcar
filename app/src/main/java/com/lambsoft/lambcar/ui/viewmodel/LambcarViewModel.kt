@@ -86,11 +86,6 @@ class LambcarViewModel(private val application: Application): AndroidViewModel(a
     }
 
     @RequiresPermission(PERMISSION_BLUETOOTH_CONNECT)
-    fun discoverActiveDeviceServices() {
-        activeConnection.value?.discoverServices()
-    }
-
-    @RequiresPermission(PERMISSION_BLUETOOTH_CONNECT)
     fun writeDirection(value: Byte) {
         activeConnection.value?.writeDirection(value)
     }

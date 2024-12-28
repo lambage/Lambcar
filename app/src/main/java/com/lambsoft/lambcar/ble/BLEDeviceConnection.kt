@@ -28,12 +28,13 @@ class BLEDeviceConnection @RequiresPermission("PERMISSION_BLUETOOTH_CONNECT") co
 
     @OptIn(ExperimentalStdlibApi::class)
     private val callback = object: BluetoothGattCallback() {
+
+        @RequiresPermission(PERMISSION_BLUETOOTH_CONNECT)
         override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
             super.onConnectionStateChange(gatt, status, newState)
             val connected = newState == BluetoothGatt.STATE_CONNECTED
             if (connected) {
-                //read the list of services
-                services.value = gatt.services
+                gatt.discoverServices()
             }
             isConnected.value = connected
         }
@@ -57,6 +58,7 @@ class BLEDeviceConnection @RequiresPermission("PERMISSION_BLUETOOTH_CONNECT") co
 
     @RequiresPermission(PERMISSION_BLUETOOTH_CONNECT)
     fun disconnect() {
+        Log.d("LambcarViewModel", "disconnecting")
         gatt?.disconnect()
         gatt?.close()
         gatt = null
