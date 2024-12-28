@@ -37,6 +37,7 @@ fun MainNavigation(viewModel: LambcarViewModel = viewModel()) {
             selectDevice = { device ->
                 viewModel.stopScanning()
                 viewModel.setActiveDevice(device)
+                viewModel.connectActiveDevice()
             }
         )
     }
@@ -48,10 +49,10 @@ fun MainNavigation(viewModel: LambcarViewModel = viewModel()) {
             },
             isDeviceConnected = uiState.isDeviceConnected,
             discoveredCharacteristics = uiState.discoveredCharacteristics,
-            connect = viewModel::connectActiveDevice,
             writeDirection = viewModel::writeDirection,
             writeSpeed = viewModel::writeSpeed,
-            writeTurn = viewModel::writeTurn
+            writeTurn = viewModel::writeTurn,
+            resetTurn = viewModel::resetTurn
         )
     }
 }

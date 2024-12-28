@@ -1,62 +1,43 @@
 package com.lambsoft.lambcar.ui.screens
 
 
+import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.pm.ActivityInfo
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.scrollable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.material3.Button
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.consumePositionChange
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import coil.compose.rememberAsyncImagePainter
 import coil.request.ImageRequest
 import com.lambsoft.lambcar.R
 import com.lambsoft.lambcar.ble.LAMBCAR_BLE_SERVICE
+import kotlinx.coroutines.flow.MutableStateFlow
 
 @Composable
 fun LandscapeOnlyComposable(content: @Composable() () -> Unit) {
@@ -81,18 +62,13 @@ fun DeviceScreen(
     unselectDevice: () -> Unit,
     isDeviceConnected: Boolean,
     discoveredCharacteristics: Map<String, List<String>>,
-    connect: () -> Unit,
     writeDirection: (Byte) -> Unit,
     writeSpeed: (Byte) -> Unit,
-    writeTurn: (Byte) -> Unit
+    writeTurn: (Byte) -> Unit,
+    resetTurn: () -> Unit
 ) {
     val foundTargetService = discoveredCharacteristics.contains(LAMBCAR_BLE_SERVICE.toString())
-
-    if (!isDeviceConnected) {
-        connect()
-    }
-
-    LandscapeOnlyComposable(){
+    LandscapeOnlyComposable() {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -105,14 +81,31 @@ fun DeviceScreen(
             } else if (!foundTargetService) {
                 Text("Connecting to service...")
             } else {
-                SteeringWheelSlider(imageResource = R.drawable.steering_wheel, writeTurn = writeTurn)
+                val rotationAngleFlow = remember { MutableStateFlow(0f) }
+                var lastAngleUpdate by remember { mutableLongStateOf(0L) }
+
+                SteeringWheelSlider(
+                    imageResource = R.drawable.steering_wheel,
+                    rotationAngleFlow = rotationAngleFlow,
+                    resetTurn = resetTurn
+                )
+                LaunchedEffect(Unit) {
+                    rotationAngleFlow.collect { newAngle ->
+                        val debounceTimeMillis = 10L // Adjust as needed
+                        val writeAngle = (newAngle + 90).toInt().toByte()
+                        val currentTime = System.currentTimeMillis()
+                        if (currentTime - lastAngleUpdate > debounceTimeMillis) {
+                            writeTurn(writeAngle)
+                            lastAngleUpdate = currentTime
+                        }
+                    }
+                }
             }
-            OutlinedButton(modifier = Modifier.padding(top = 40.dp),  onClick = unselectDevice) {
+            OutlinedButton(modifier = Modifier.padding(top = 40.dp), onClick = unselectDevice) {
                 Text("Disconnect")
             }
         }
     }
-
     /*
     Column(
         Modifier.scrollable(rememberScrollState(), Orientation.Vertical)
@@ -198,14 +191,15 @@ fun DeviceScreen(
      */
 }
 
+@SuppressLint("ReturnFromAwaitPointerEventScope")
 @Composable
 fun SteeringWheelSlider(
     modifier: Modifier = Modifier,
     imageResource: Int, // or use a URL String if fetching from network
-    writeTurn: (Byte) -> Unit,
+    rotationAngleFlow: MutableStateFlow<Float>,
+    resetTurn: () -> Unit
 ) {
-    var rotationAngle by remember { mutableStateOf(0f) }
-
+    val rotationAngle by rotationAngleFlow.collectAsState()
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -213,8 +207,13 @@ fun SteeringWheelSlider(
             .pointerInput(Unit) {
                 detectDragGestures(
                     onDrag = { change, dragAmount ->
-                        rotationAngle = (rotationAngle + dragAmount.x / 5).coerceIn(-90f, 90f)
+                        val newAngle = (rotationAngle + dragAmount.x / 5).coerceIn(-90f, 90f)
+                        rotationAngleFlow.value = newAngle
                         if (change.positionChange() != Offset.Zero) change.consume()
+                    },
+                    onDragEnd = {
+                        rotationAngleFlow.value = 0f
+                        resetTurn()
                     }
                 )
             },
@@ -234,7 +233,4 @@ fun SteeringWheelSlider(
             contentScale = ContentScale.Fit
         )
     }
-    //Text(text = "Rotation: ${rotationAngle.toInt()}")
-    val turnAngle = (rotationAngle + 90).toInt().toByte()
-    writeTurn(turnAngle)
 }

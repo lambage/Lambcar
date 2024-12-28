@@ -100,6 +100,11 @@ class LambcarViewModel(private val application: Application): AndroidViewModel(a
         activeConnection.value?.writeTurn(value)
     }
 
+    @RequiresPermission(PERMISSION_BLUETOOTH_CONNECT)
+    fun resetTurn() {
+        activeConnection.value?.resetTurn()
+    }
+
     override fun onCleared() {
         super.onCleared()
 

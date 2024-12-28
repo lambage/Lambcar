@@ -9,7 +9,12 @@ import android.bluetooth.BluetoothGattService
 import android.content.Context
 import android.util.Log
 import androidx.annotation.RequiresPermission
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.UUID
 
 
@@ -70,11 +75,6 @@ class BLEDeviceConnection @RequiresPermission("PERMISSION_BLUETOOTH_CONNECT") co
     }
 
     @RequiresPermission(PERMISSION_BLUETOOTH_CONNECT)
-    fun discoverServices() {
-        gatt?.discoverServices()
-    }
-
-    @RequiresPermission(PERMISSION_BLUETOOTH_CONNECT)
     fun writeDirection(value: Byte) {
         val service = gatt?.getService(LAMBCAR_BLE_SERVICE)
         val characteristic = service?.getCharacteristic(DIRECTION_CHARACTERISTIC_UUID)
@@ -107,5 +107,39 @@ class BLEDeviceConnection @RequiresPermission("PERMISSION_BLUETOOTH_CONNECT") co
         }
     }
 
+    @RequiresPermission(PERMISSION_BLUETOOTH_CONNECT)
+    fun resetTurn() {
+        CoroutineScope(Dispatchers.Main).launch { // Launch coroutine on the Main thread
+            val service = gatt?.getService(LAMBCAR_BLE_SERVICE)
+            val characteristic = service?.getCharacteristic(TURN_CHARACTERISTIC_UUID)
+            val success = writeCharacteristicWithRetry(gatt, characteristic)
+            if (success) {
+                Log.d("bluetooth", "Reset turn")
+            } else {
+                Log.d("bluetooth", "Failed to reset turn")
+            }
+        }
+    }
 
+    @RequiresPermission(PERMISSION_BLUETOOTH_CONNECT)
+    suspend fun writeCharacteristicWithRetry(gatt: BluetoothGatt?, characteristic: BluetoothGattCharacteristic?, maxRetries: Int = 5, retryDelayMillis: Long = 20): Boolean {
+        var success = false
+        var retries = 0
+        withContext(Dispatchers.IO) { // Use IO dispatcher for network operations
+            while (!success && retries < maxRetries) {
+                try {
+                    success = gatt?.writeCharacteristic(characteristic) ?: false // Handle null gatt
+                    if (!success) {
+                        delay(retryDelayMillis) // Wait before retrying
+                        retries++
+                    }
+                } catch (e: Exception) {
+                    println("Error writing characteristic: ${e.message}")
+                    // Log the error for debugging.  Consider more sophisticated error handling here.
+                    retries++ // Increment retries even on exception
+                }
+            }
+        }
+        return success
+    }
 }
